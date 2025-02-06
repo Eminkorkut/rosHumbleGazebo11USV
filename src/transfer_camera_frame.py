@@ -1,66 +1,65 @@
-import os
-import time
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from ultralytics import YOLO
 from rclpy.node import Node
 import rclpy
+import time
 import cv2
+import os
 
 class ImageSubscriber(Node):
     def __init__(self):
-        super().__init__('image_subscriber')
+        # ROS2 node başlat
+        super().__init__('imageSubscriber')
+        
+        # Kameradan görüntü almak için abone oluştur
         self.subscription = self.create_subscription(
             Image,
             '/vessel_a/camera/image_raw',
             self.imageCallback,
             10
         )
-        self.bridge = CvBridge()
-        self.model = YOLO('weights/230_epochs/weights/best.pt')  # Eğitimli modeli yükle
         
-        # Frame sayacı
-        self.frame_count = 0
+        # CvBridge nesnesi, ROS görüntülerini OpenCV formatına dönüstür
+        self.bridge = CvBridge()
+        
+        # YOLO modelini dahil et
+        self.model = YOLO('weights/230_epochs/weights/best.pt')  
 
     def imageCallback(self, msg):
-        # ROS mesajını OpenCV formatına çevirme
+        # ROS mesajını OpenCV formatına çeviriyoruz
         frame = self.bridge.imgmsg_to_cv2(msg, 'bgr8')
 
-        # YOLO nesne tespiti
+        # nesne tanıma işlemi
         results = self.model(frame)
         
-        # Algoritma sonuçları üzerinde gezinme
+        # Modelin sonuçlarını kullanarak box çiziyoruz
         for result in results:
             boxes = result.boxes
             for box in boxes:
-                # Bounding box koordinatlarını al
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 conf = box.conf[0]
                 classId = int(box.cls[0])
-                label = f'{self.model.names[classId]} {conf:.2f}'  # Etiketi ve güveni ekle
+                
+                label = f'{self.model.names[classId]} {conf:.2f}' 
 
-                # Bounding box çizme
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)  # Yeşil kutu
-                cv2.putText(frame, label, (x1, y1 - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)  # Etiket yazısı
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)  
+                cv2.putText(frame, label, (x1, y1 - 10),cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)  
 
-        # Frame'i ekranda gösterme
-        cv2.imshow('frame', frame)  # Ekranda görüntüleme
-        cv2.waitKey(1)  # 1ms bekleyerek görüntüyü güncelle
+        cv2.imshow('frame', frame)  
+        cv2.waitKey(1)  
 
+# Ana fonksiyon
 def main(args=None):
     rclpy.init(args=args)
-    
     node = ImageSubscriber()
-    
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
-        pass
     finally:
         node.destroy_node()
         rclpy.shutdown()
-        cv2.destroyAllWindows()
+        cv2.destroyAllWindows()  
 
+# Ana fonksiyonu çalıştırıyoruz
 if __name__ == '__main__':
     main()
