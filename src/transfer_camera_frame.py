@@ -17,7 +17,7 @@ class ImageSubscriber(Node):
             10
         )
         self.bridge = CvBridge()
-        self.model = YOLO('best.pt')  # Eğitimli modeli yükle
+        self.model = YOLO('weights/230_epochs/weights/best.pt')  # Eğitimli modeli yükle
         
         # Frame sayacı
         self.frame_count = 0
