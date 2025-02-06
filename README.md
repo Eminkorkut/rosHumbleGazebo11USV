@@ -7,7 +7,7 @@ USV control in the gazebo11 simulation environment using ros2 humble code framew
 
 <p1>Download if you don't have git</p1>
 ```bash
-  sudo apt install git
+sudo apt install git
 ```
 
 <p1>Clone the repo</p1>
