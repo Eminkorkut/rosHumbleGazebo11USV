@@ -6,93 +6,100 @@ import rclpy
 
 class VesselController(Node):
     def __init__(self):
-        super().__init__('vessel_controller')
-        self.publisher_ = self.create_publisher(Twist, '/vessel_a/cmd_vel', 10)
+        # Gemi kontrolü için node oluşturuluyor
+        super().__init__('vesselController')  
         
-        # Mevcut hızlar (lineer ve açısal)
-        self.current_velocity = 0.0
-        self.current_angular_velocity = 0.0
+        # Geminin hareketini yayınlayacak bir publisher
+        self.publisher_ = self.create_publisher(Twist, '/vessel_a/cmd_vel', 10)  
 
-        # Uygulanan kuvvet ve tork değerleri (komutlara bağlı)
-        self.applied_force = 0.0
-        self.applied_torque = 0.0
+        # Mevcut hızlar (lineer ve açısal)
+        self.currentVelocity = 0.0
+        self.currentAngularVelocity = 0.0
+
+        # Uygulanan kuvvet ve tork değerleri (komutlara bağlı olarak değişir)
+        self.appliedForce = 0.0
+        self.appliedTorque = 0.0
 
         # Dinamik model parametreleri
-        self.mass = 1.0         # Araç kütlesi
-        self.inertia = 1.0      # Atalet momenti
-        self.dt = 0.1           # Güncelleme periyodu (saniye)
+        self.mass = 1.0  # Araç kütlesi
+        self.inertia = 1.0  # Atalet momenti
+        self.dt = 0.1  # Güncelleme periyodu (saniye)
 
         # Timer callback: her dt süresinde hızı güncelle
         self.timer = self.create_timer(self.dt, self.update)
 
         # Klavye dinleyicisini ayrı bir iş parçacığında çalıştırıyoruz.
-        self.keyboard_thread = threading.Thread(target=self.keyboardListener)
-        self.keyboard_thread.daemon = True
-        self.keyboard_thread.start()
+        self.keyboardThread = threading.Thread(target=self.keyboardListener)
+        # Daemon thread, ana iş parçacığı kapandığında otomatik olarak kapanır
+        self.keyboardThread.daemon = True  
+        self.keyboardThread.start()
 
     def update(self):
-        """
-        Uygulanan kuvvet ve tork değerlerine göre aracın hızını hesaplar ve Twist mesajını yayınlar.
-        Basit bir Euler entegrasyonu kullanılarak hız güncellemesi yapılır.
-        """
-        # F = m * a  =>  a = F / m
-        acceleration = self.applied_force / self.mass
-        angular_acceleration = self.applied_torque / self.inertia
+        # F = m * a  =>  a = F / m 
+        acceleration = self.appliedForce / self.mass
+        angularAcceleration = self.appliedTorque / self.inertia
 
         # Hız güncellemesi
-        self.current_velocity += acceleration * self.dt
-        self.current_angular_velocity += angular_acceleration * self.dt
+        self.currentVelocity += acceleration * self.dt
+        self.currentAngularVelocity += angularAcceleration * self.dt
 
-        # Basit bir sönümleme (frenleme, hava direnci vb.) ekleyelim
-        damping = 0.9
-        self.current_velocity *= damping
-        self.current_angular_velocity *= damping
+        # hızları azaltma
+        damping = 0.9  # Sönümleme faktörü
+        self.currentVelocity *= damping
+        self.currentAngularVelocity *= damping
 
-        # Hesaplanan hızlara göre Twist mesajını oluşturup yayınlayalım.
+
+        # Hesaplanan hızlara göre Twist mesajını oluşturup yayınlıyoruz
         twist = Twist()
-        twist.linear.x = self.current_velocity
-        twist.angular.z = self.current_angular_velocity
+        twist.linear.x = self.currentVelocity
+        twist.angular.z = self.currentAngularVelocity
         self.publisher_.publish(twist)
 
     def keyboardListener(self):
         def onPress(key):
             try:
+                # Yukarı ok tuşuna basılınca ileriye hareket
                 if key == keyboard.Key.up:  
-                    self.applied_force = 5.0  
+                    self.appliedForce = 5.0  
+                # Aşağı ok tuşuna basılınca geri hareket
                 elif key == keyboard.Key.down:  
-                    self.applied_force = -5.0  
+                    self.appliedForce = -5.0  
+                # Sol ok tuşuna basılınca sola dönme
                 elif key == keyboard.Key.left: 
-                    self.applied_torque = 2.0  
+                    self.appliedTorque = 2.0  
+                # Sağ ok tuşuna basılınca sağa dönme
                 elif key == keyboard.Key.right:  
-                    self.applied_torque = -2.0  
+                    self.appliedTorque = -2.0  
             except AttributeError:
                 pass
 
         def onRelease(key):
-            self.applied_force = 0.0
-            self.applied_torque = 0.0
+            self.appliedForce = 0.0
+            self.appliedTorque = 0.0
 
+            # ESC tuşuna basıldığında program sonlanır
             if key == keyboard.Key.esc:  
                 return False
 
+        # Klavyeyi dinle
         with keyboard.Listener(on_press=onPress, on_release=onRelease) as listener:
             listener.join()
 
+    # Node kapatildiginda klavyeyide kapat
     def destroy_node(self):
-        self.keyboard_thread.join()
-        super().destroy_node()
+        self.keyboardThread.join()  
+        super().destroy_node() 
 
 def main(args=None):
-    rclpy.init(args=args)
-    vessel_controller = VesselController()
+    rclpy.init(args=args)  
+    vesselController = VesselController()  
 
     try:
-        rclpy.spin(vessel_controller)
-    except KeyboardInterrupt:
-        pass
+        rclpy.spin(vesselController)  
+    finally:
+        vesselController.destroy_node()  
+        rclpy.shutdown()  
 
-    vessel_controller.destroy_node()
-    rclpy.shutdown()
-
+# Ana fonksiyonu çalıştırıyoruz
 if __name__ == '__main__':
-    main()
+    main()  
