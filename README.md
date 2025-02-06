@@ -41,7 +41,7 @@ sudo apt update
 sudo apt upgrade
 sudo apt install python3-pip
 cd requirements/
-pip3 -r requirementsPython.txt
+pip3 install -r requirementsPython.txt
 ```
 
 <p1>Plugin controls</p1>
