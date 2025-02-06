@@ -29,7 +29,7 @@ USV control in the gazebo11 simulation environment using ros2 humble code framew
   ./gazeboInstall.bash
 ```
 
-<p1>pPython and Library Setup</p1>
+<p1>Python and Library Setup</p1>
 ```bash
   sudo apt install python3
   sudo apt update
@@ -37,6 +37,12 @@ USV control in the gazebo11 simulation environment using ros2 humble code framew
   sudo apt install python3-pip
   cd requirements/
   pip3 -r requirementsPython.txt
+```
+
+<p1>Plugin Controls</p1>
+```bash
+  locate libgazebo_ros_camera.so && locate libgazebo_ros_planar_move.so ## If the output is blank, use the following command
+  sudo cp -r rosHumbleGazebo11USV/plugin/* /opt/ros/humble/lib/
 ```
 
 
