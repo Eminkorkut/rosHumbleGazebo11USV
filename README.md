@@ -76,7 +76,7 @@ sed -i '/<depend>rclpy<\/depend>/a \  <depend>geometry_msgs</depend>\n  <depend>
 sed -i "/'console_scripts': \[/a \ \ \ \ \ \ \ \ \ \ \ \ \"boat_control_with_keyboard = myRos2.boat_control_with_keyboard:main\",\n\ \ \ \ \ \ \ \ \ \ \ \ \"transfer_camera_frame = myRos2.transfer_camera_frame:main\",\n\ \ \ \ \ \ \ \ \ \ \ \ \"autonomous_boat_movement = myRos2.autonomous_boat_movement:main\"," setup.py
 ```
 
-<p1>Make the necessary adjustments</p1>
+<p1>Build the project</p1>
 ```bash
 cd ~/rosHumbleGazebo11USV
 colcon build
