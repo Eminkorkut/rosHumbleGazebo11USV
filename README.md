@@ -13,10 +13,6 @@ This guide explains the integration of USV (Unmanned Surface Vehicle) control wi
 </p>
 
 
-
-
-
-
 <h2>🛠️ Installation Steps:</h2>
 
 <p1>Download if you don't have git</p1>
@@ -65,6 +61,15 @@ locate libgazebo_ros_camera.so && locate libgazebo_ros_planar_move.so
 # If the output is blank, use the following command
 sudo cp -r plugin/* /opt/ros/humble/lib/
 ```
+
+<h2>🔗 Useful Resources</h2>
+<p>For further details on the technologies used in this project, refer to the official documentation:</p>
+<ul>
+  <li><a href="https://docs.ros.org/en/humble/" target="_blank">ROS2 Humble Documentation</a></li>
+  <li><a href="https://classic.gazebosim.org/tutorials?tut=install_ubuntu" target="_blank">Gazebo 11 Documentation</a></li>
+  <li><a href="https://github.com/ultralytics/ultralytics" target="_blank">YOLOv11 GitHub Repository</a></li>
+</ul>
+
 
 <h2>🛠️ Stages of Use</h2>
 
