@@ -146,7 +146,7 @@ ros2 run myRos2 autonomous_boat_movement
 <ol>
   <li>Fork the repository: <a href="https://github.com/Eminkorkut/rosHumbleGazebo11USV/fork" target="_blank">Fork on GitHub</a></li>
   <li>Clone your forked repository:</li>
-  <pre><code>git clone https://github.com/Eminkorkut/rosHumbleGazebo11USV.git</code></pre>
+  <pre><code>git clone https://github.com/YOUR-NAME/rosHumbleGazebo11USV.git</code></pre>
   <li>Create a new branch:</li>
   <pre><code>git checkout -b feature-branch-name</code></pre>
   <li>Make your changes and commit them:</li>
