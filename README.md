@@ -1,7 +1,8 @@
 
 # 🚢 Ros2 Humble, Gazebo11 and USV
 
-USV control in the gazebo11 simulation environment using ros2 humble code frameworks.
+This guide explains the integration of USV (Unmanned Surface Vehicle) control within the Gazebo 11 simulation environment, utilizing ROS2 Humble for efficient communication and control.
+
 
 <p align="center">
   <img src="https://github.com/Eminkorkut/rosHumbleGazebo11USV/blob/main/image/gazebo11.png" alt="Gazebo 11" width="800"/>
@@ -113,7 +114,7 @@ ros2 run myRos2 autonomous_boat_movement
 ```
 
 
-## Features
+## 🚀 Features
 
 - Transferring Camera Image
 - Object Detection
@@ -122,7 +123,7 @@ ros2 run myRos2 autonomous_boat_movement
 - Autonomous pontoon crossing
 
 
-## Programs/algorithms Used
+## 🧑‍💻 Programs/algorithms Used
 
 **Operating System:** Ubuntu 22.04.5 LTS x86_64 
 
@@ -136,7 +137,7 @@ ros2 run myRos2 autonomous_boat_movement
 
 
   
-## Authors
+## ✍️ Authors
 
 - [@Eminkorkut](https://github.com/Eminkorkut)
 
