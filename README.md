@@ -25,6 +25,7 @@ cd rosHumbleGazebo11USV
 cd requirements/
 chmod +x ros2Install.bash
 ./ros2Install.bash
+cd ..
 ```
 
 <p1>Gazebo11 installation</p1>
@@ -32,6 +33,7 @@ chmod +x ros2Install.bash
 cd requirements/
 chmod +x gazeboInstall.bash
 ./gazeboInstall.bash
+cd ..
 ```
 
 <p1>Python and library setup</p1>
@@ -40,13 +42,13 @@ sudo apt install python3
 sudo apt update
 sudo apt upgrade
 sudo apt install python3-pip
-cd requirements/
-pip3 install -r requirementsPython.txt
+pip3 install -r requirements/requirementsPython.txt
 ```
 
 <p1>Plugin controls</p1>
 ```bash
-locate libgazebo_ros_camera.so && locate libgazebo_ros_planar_move.so ## If the output is blank, use the following command
+locate libgazebo_ros_camera.so && locate libgazebo_ros_planar_move.so
+# If the output is blank, use the following command
 sudo cp -r rosHumbleGazebo11USV/plugin/* /opt/ros/humble/lib/
 ```
 
