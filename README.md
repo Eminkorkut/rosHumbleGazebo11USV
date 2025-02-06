@@ -141,6 +141,23 @@ ros2 run myRos2 autonomous_boat_movement
 **Programming Language Used:** Python 3.10.12
 
 
+<h2>🤝 Contribute to the Project</h2>
+<p>We welcome contributions to improve this project! If you’d like to contribute, follow these steps:</p>
+<ol>
+  <li>Fork the repository: <a href="https://github.com/Eminkorkut/rosHumbleGazebo11USV/fork" target="_blank">Fork on GitHub</a></li>
+  <li>Clone your forked repository:</li>
+  <pre><code>git clone https://github.com/YOUR-USERNAME/rosHumbleGazebo11USV.git</code></pre>
+  <li>Create a new branch:</li>
+  <pre><code>git checkout -b feature-branch-name</code></pre>
+  <li>Make your changes and commit them:</li>
+  <pre><code>git add .
+git commit -m "Describe your changes"
+git push origin feature-branch-name</code></pre>
+  <li>Open a Pull Request: <a href="https://github.com/Eminkorkut/rosHumbleGazebo11USV/pulls" target="_blank">Create a PR</a></li>
+</ol>
+<p>Thank you for your contributions! 🚀</p>
+
+
   
 ## ✍️ Authors
 
