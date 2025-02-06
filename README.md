@@ -45,6 +45,14 @@ USV control in the gazebo11 simulation environment using ros2 humble code framew
   sudo cp -r rosHumbleGazebo11USV/plugin/* /opt/ros/humble/lib/
 ```
 
+<h2>🛠️ Stages of Use</h2>
+
+<p1>Plugin Controls</p1>
+```bash
+  locate libgazebo_ros_camera.so && locate libgazebo_ros_planar_move.so ## If the output is blank, use the following command
+  sudo cp -r rosHumbleGazebo11USV/plugin/* /opt/ros/humble/lib/
+```
+
 
 ## Features
 
