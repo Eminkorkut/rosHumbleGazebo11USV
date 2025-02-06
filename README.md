@@ -77,11 +77,11 @@ mv src/*.py src/myRos2/myRos2/
 cd src/myRos2
 sed -i '/<depend>rclpy<\/depend>/a \  <depend>geometry_msgs</depend>\n  <depend>threading</depend>\n  <depend>pynput</depend>\n  <depend>cv2</depend>\n  <depend>cv_bridge</depend>\n  <depend>sensor_msgs</depend>\n  <depend>ultralytics</depend>\n  <depend>numpy</depend>' package.xml
 sed -i "/'console_scripts': \[/a \ \ \ \ \ \ \ \ \ \ \ \ \"boat_control_with_keyboard = myRos2.boat_control_with_keyboard:main\",\n\ \ \ \ \ \ \ \ \ \ \ \ \"transfer_camera_frame = myRos2.transfer_camera_frame:main\",\n\ \ \ \ \ \ \ \ \ \ \ \ \"autonomous_boat_movement = myRos2.autonomous_boat_movement:main\"," setup.py
+cd ../..
 ```
 
 <p1>Build the project</p1>
 ```bash
-cd ~/rosHumbleGazebo11USV
 colcon build
 source install/setup.bash 
 ```
