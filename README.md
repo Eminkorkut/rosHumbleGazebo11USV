@@ -64,6 +64,7 @@ cd rosHumbleGazebo11USV
 colcon build
 cd src/
 ros2 pkg create myRos2 --build-type ament_python --dependencies rclpy
+cd ..
 ```
 
 <p1>Move codes to required places</p1>
