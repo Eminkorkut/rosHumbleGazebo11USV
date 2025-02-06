@@ -86,6 +86,19 @@ colcon build
 source install/setup.bash 
 ```
 
+<p1>Start and debug gazebo in a terminal</p1>
+```bash
+cd world/
+gazebo 2duba.world --verbose
+```
+
+<p1>Launching any topic</p1>
+```bash
+colcon build
+source install/setup.bash
+ros2 run myRos2 autonomous_boat_movement
+```
+
 
 ## Features
 
