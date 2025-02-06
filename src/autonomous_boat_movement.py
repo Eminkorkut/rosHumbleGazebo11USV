@@ -20,7 +20,7 @@ class VesselController(Node):
             10
         )
         self.bridge = CvBridge()
-        self.model = YOLO('best.pt')
+        self.model = YOLO('weights/230_epochs/weights/best.pt')
         
         self.current_velocity = 0.1
         self.current_angular_velocity = 0.0
