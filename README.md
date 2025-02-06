@@ -78,7 +78,7 @@ sed -i "/'console_scripts': \[/a \ \ \ \ \ \ \ \ \ \ \ \ \"boat_control_with_key
 
 <p1>Make the necessary adjustments</p1>
 ```bash
-cd ~/ros2_ws/
+cd ~/rosHumbleGazebo11USV
 colcon build
 source install/setup.bash 
 ```
