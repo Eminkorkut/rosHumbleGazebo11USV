@@ -54,8 +54,7 @@ sudo cp -r rosHumbleGazebo11USV/plugin/* /opt/ros/humble/lib/
 
 <p1>Create a working environment</p1>
 ```bash
-mkdir -p ros2_ws/src
-cd ros2_ws/
+cd rosHumbleGazebo11USV
 ```
 
 <p1>Colcon and Ros2 form the foundation</p1>
@@ -67,7 +66,7 @@ ros2 pkg create myRos2 --build-type ament_python --dependencies rclpy
 
 <p1>Move codes to required places</p1>
 ```bash
-mv rosHumbleGazebo11/src/* rosHumbleGazebo11/src/myRos2/myRos2
+mv src/*.py src/myRos2/myRos2/
 ```
 
 <p1>Make the necessary adjustments</p1>
