@@ -29,6 +29,16 @@ USV control in the gazebo11 simulation environment using ros2 humble code framew
   ./gazeboInstall.bash
 ```
 
+<p1>pPython and Library Setup</p1>
+```bash
+  sudo apt install python3
+  sudo apt update
+  sudo apt upgrade
+  sudo apt install python3-pip
+  cd requirements/
+  pip3 -r requirementsPython.txt
+```
+
 
 ## Features
 
