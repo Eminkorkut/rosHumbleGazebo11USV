@@ -1,93 +1,100 @@
-import threading
-import rclpy
-from rclpy.node import Node
-from geometry_msgs.msg import Twist
 from sensor_msgs.msg import Image
+from geometry_msgs.msg import Twist
 from cv_bridge import CvBridge
 from ultralytics import YOLO
-import numpy as np
+from rclpy.node import Node
+import rclpy
 import cv2
-import math
+
 
 class VesselController(Node):
     def __init__(self):
-        super().__init__('vessel_controller')
+        super().__init__('vesselController')
+        # gemi hareketlerini yayınlamak için bir yayıncı oluştur
         self.publisher_ = self.create_publisher(Twist, '/vessel_a/cmd_vel', 10)
+        # kameradan görüntü almak için bir abone oluştur
         self.subscription = self.create_subscription(
             Image,
             '/vessel_a/camera/image_raw',
             self.imageCallback,
             10
         )
+        # cv2 kütüphanesini kullanmak için bir nesne oluştur
         self.bridge = CvBridge()
+        # YOLO modelini yükle
         self.model = YOLO('weights/230_epochs/weights/best.pt')
         
-        self.current_velocity = 0.1
-        self.current_angular_velocity = 0.0
-        self.applied_force = 0.0
-        self.applied_torque = 0.0
+        # gemi hareketleri için değişkenler
+        self.currentVelocity = 0.1
+        self.currentAngularVelocity = 0.0
+        self.appliedForce = 0.0
+        self.appliedTorque = 0.0
         # arac kütlesi
         self.mass = 1.0
-        # atalet
+        # atalet momenti
         self.inertia = 1.0
         # zaman adımı (frekansı)
         self.dt = 0.1
 
+        # zamanlayıcı oluştur
         self.timer = self.create_timer(self.dt, self.update)
-        self.last_target_pair = None
-        self.target_history = []  # Hedef geçmişi
+        self.lastTargetPair = None
+        self.targetHistory = []  # Hedef geçmişi
         self.alpha = 0.2  # EMA ağırlık katsayısı
 
-        self.prev_error_x = 0.0
-        self.integral_x = 0.0
+        self.prevErrorX = 0.0
+        self.integralX = 0.0
         # pid yapisi
-        self.Kp_angular = 0.002  # Daha düşük kazanç
-        self.Ki_angular = 0.0001  # Entegre kazancı
-        self.Kd_angular = 0.001  # Türev kazancı
+        self.KpAngular = 0.002  # Daha düşük kazanç
+        self.KiAngular = 0.0001  # Entegre kazancı
+        self.KdAngular = 0.001  # Türev kazancı
 
     def update(self):
         # hız ve yön güncelleme     
-        acceleration = self.applied_force / self.mass
-        angular_acceleration = self.applied_torque / self.inertia
+        acceleration = self.appliedForce / self.mass
+        angularAcceleration = self.appliedTorque / self.inertia
 
         # ivme hesabı
-        self.current_velocity += acceleration * self.dt
-        self.current_angular_velocity += angular_acceleration * self.dt
+        self.currentVelocity += acceleration * self.dt
+        self.currentAngularVelocity += angularAcceleration * self.dt
 
         # yeni hiz belirleleme
         damping = 0.95  # Daha yüksek sönümleme faktörü
-        self.current_velocity *= damping
-        self.current_angular_velocity *= damping
+        self.currentVelocity *= damping
+        self.currentAngularVelocity *= damping
 
         # ros2 mesajı yayinla
         twist = Twist()
-        twist.linear.x = self.current_velocity
-        twist.angular.z = self.current_angular_velocity
+        twist.linear.x = self.currentVelocity
+        twist.angular.z = self.currentAngularVelocity
         self.publisher_.publish(twist)
 
-    def adjustMovement(self, avg_x, ref_x, avg_y, ref_y):
+    def adjustMovement(self, avgX, refX, avgY, refY):
         # hatayi hesapla
-        error_x = avg_x - ref_x
-        self.integral_x += error_x * self.dt
-        derivative_x = (error_x - self.prev_error_x) / self.dt
+        errorX = avgX - refX
+        self.integralX += errorX * self.dt
+        derivative_x = (errorX - self.prevErrorX) / self.dt
 
         # PID ile verilmesi gereken kuvvet
-        self.applied_torque = -(self.Kp_angular * error_x + self.Ki_angular * self.integral_x + self.Kd_angular * derivative_x)
-        self.applied_force = 0.01 * (avg_y - ref_y)
+        self.appliedTorque = -(self.KpAngular * errorX + self.KiAngular * self.integralX + self.KdAngular * derivative_x)
+        self.appliedForce = 0.01 * (avgY - refY)
 
         # Yön hatasını sınırlandırma (örn. -1 ile 1 arası)
-        if self.applied_torque > 1.0:
-            self.applied_torque = 1.0
-        elif self.applied_torque < -1.0:
-            self.applied_torque = -1.0
+        if self.appliedTorque > 1.0:
+            self.appliedTorque = 1.0
+        elif self.appliedTorque < -1.0:
+            self.appliedTorque = -1.0
 
-        self.prev_error_x = error_x
+        self.prevErrorX = errorX
 
     def imageCallback(self, msg):
+        # Görüntüyü al
         frame = self.bridge.imgmsg_to_cv2(msg, 'bgr8')
+        # YOLO modelini kullanarak nesneleri algıla
         results = self.model.predict(frame, max_det=5, iou=0.6)
 
-        ref_x, ref_y = frame.shape[1] // 2, (frame.shape[0] // 2 + 50)
+        # Geminin orta noktasını al
+        refX, refY = frame.shape[1] // 2, (frame.shape[0] // 2 + 50)
         detections = []
 
         for result in results:
@@ -104,71 +111,82 @@ class VesselController(Node):
 
         if len(detections) >= 2:
             # Y değerleri arasındaki farkı kontrol et
-            max_y_diff = 50  # Y değerleri arasındaki maksimum farkı belirleyin (bu değeri ihtiyaca göre ayarlayın)
+            max_y_diff = 50  # Y değerleri arasındaki maksimum fark (yanlis hedefleme durumunu azaltma)
+            # Y değerine göre sırala (bize en yakin dubalar y degeri olarak daha buyuktur)
             detections.sort(key=lambda x: x[1], reverse=True)
 
-            # Yüksek y değeri farkına sahip olan hedefleri eleyin
+            # belirlenen dubalar arasinda y degeri kontrolu
             if abs(detections[0][1] - detections[1][1]) < max_y_diff:
-                self.last_target_pair = detections[0], detections[1]
+                self.lastTargetPair = detections[0], detections[1]
 
-                if self.target_history:
-                    prev_x, prev_y = self.target_history[-1]
-                    avg_x = self.alpha * ((detections[0][0] + detections[1][0]) // 2) + (1 - self.alpha) * prev_x
-                    avg_y = self.alpha * ((detections[0][1] + detections[1][1]) // 2) + (1 - self.alpha) * prev_y
+                # listenin bos olup olmadigini kontrol et
+                if self.targetHistory:
+                    prev_x, prev_y = self.targetHistory[-1]
+                    avgX = self.alpha * ((detections[0][0] + detections[1][0]) // 2) + (1 - self.alpha) * prev_x
+                    avgY = self.alpha * ((detections[0][1] + detections[1][1]) // 2) + (1 - self.alpha) * prev_y
+                # hedefin orta noktasini al
                 else:
-                    avg_x = (detections[0][0] + detections[1][0]) // 2
-                    avg_y = (detections[0][1] + detections[1][1]) // 2
+                    avgX = (detections[0][0] + detections[1][0]) // 2
+                    avgY = (detections[0][1] + detections[1][1]) // 2
 
-                self.target_history.append((avg_x, avg_y))
-                if len(self.target_history) > 10:
-                    self.target_history.pop(0)
+                # hedef gecmisine hedef ekle
+                self.targetHistory.append((avgX, avgY))
+
+                # belirli sayida gecmis tut
+                if len(self.targetHistory) > 10:
+                    self.targetHistory.pop(0)
+            
+            # belirlenen dubalar y araliginin disinda ise son hedefe git
             else:
-                # Yüksek y değeri farkı olduğunda, hedefleri belirlemeyin ve default referans noktalarına dönün
-                avg_x, avg_y = ref_x, ref_y
+                avgX, avgY = refX, refY
+        
+        # Bir hedef varsa, hedefe git
         elif len(detections) == 1:
-            if self.target_history:
-                avg_x, avg_y = self.target_history[-1]
+            if self.targetHistory:
+                avgX, avgY = self.targetHistory[-1]
             else:
-                avg_x, avg_y = ref_x, ref_y
+                avgX, avgY = refX, refY
+        # Hedef yoksa, son hedefe git
         else:
-            if self.target_history:
-                avg_x, avg_y = self.target_history[-1]
+            if self.targetHistory:
+                avgX, avgY = self.targetHistory[-1]
             else:
-                avg_x, avg_y = ref_x, ref_y
+                avgX, avgY = refX, refY
 
-        self.adjustMovement(avg_x, ref_x, avg_y, ref_y)
+        # Hareketi ayarla
+        self.adjustMovement(avgX, refX, avgY, refY)
 
-        # Hedeflenen noktayı işaretle
+        # Hedeflenen kutular belirli şartlara uygunsa hedefi çiz
         if len(detections) >= 2 and abs(detections[0][1] - detections[1][1]) < max_y_diff:
-            cv2.circle(frame, (int(avg_x), int(avg_y)), 7, (255, 0, 0), -1)
-            cv2.line(frame, (ref_x, ref_y), (int(avg_x), int(avg_y)), (0, 255, 255), 2)
-            if self.last_target_pair:
-                cv2.line(frame, self.last_target_pair[0], self.last_target_pair[1], (0, 0, 255), 2)
+            cv2.circle(frame, (int(avgX), int(avgY)), 7, (255, 0, 0), -1)
+            cv2.line(frame, (refX, refY), (int(avgX), int(avgY)), (0, 255, 255), 2)
+            if self.lastTargetPair:
+                cv2.line(frame, self.lastTargetPair[0], self.lastTargetPair[1], (0, 0, 255), 2)
         
         # Geminin ortasını çiz
-        cv2.circle(frame, (ref_x, ref_y), 7, (255, 255, 0), -1)
+        cv2.circle(frame, (refX, refY), 7, (255, 255, 0), -1)
 
         # Görüntüyü göster
         cv2.imshow('frame', frame)
         cv2.waitKey(1)
 
 
-
+    # node'u kapat
     def destroy_node(self):
         super().destroy_node()
         cv2.destroyAllWindows()
 
 
+# main fonksiyonu
 def main(args=None):
     rclpy.init(args=args)
     vessel_controller = VesselController()
-    
     try:
         rclpy.spin(vessel_controller)
     finally:
         vessel_controller.destroy_node()
         rclpy.shutdown()
 
-
+# main fonksiyonunu çalıştır
 if __name__ == '__main__':
     main()
