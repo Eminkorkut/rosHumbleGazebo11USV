@@ -15,6 +15,21 @@ USV control in the gazebo11 simulation environment using ros2 humble code framew
   git clone https://github.com/Eminkorkut/rosHumbleGazebo11USV.git
 ```
 
+<p1>Ros2 Humble Installation</p1>
+```bash
+  cd requirements/
+  chmod +x ros2Install.bash
+  ./ros2Install.bash
+```
+
+<p1>Gazebo11 Installation</p1>
+```bash
+  cd requirements/
+  chmod +x gazeboInstall.bash
+  ./gazeboInstall.bash
+```
+
+
 ## Features
 
 - Transferring Camera Image
