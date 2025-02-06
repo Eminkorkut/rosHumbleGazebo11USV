@@ -15,6 +15,11 @@ sudo apt install git
 git clone https://github.com/Eminkorkut/rosHumbleGazebo11USV.git
 ```
 
+<p1>Get inside the repo</p1>
+```bash
+cd rosHumbleGazebo11USV
+```
+
 <p1>Ros2 Humble installation</p1>
 ```bash
 cd requirements/
