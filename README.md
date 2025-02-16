@@ -41,6 +41,7 @@ cd ..
 <p1>Gazebo11 installation</p1>
 ```bash
 cd requirements/
+sudo apt install curl
 chmod +x gazeboInstall.bash
 ./gazeboInstall.bash
 cd ..
