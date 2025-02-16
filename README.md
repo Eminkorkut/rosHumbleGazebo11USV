@@ -112,6 +112,8 @@ source install/setup.bash
 <p1>Start and debug gazebo in a terminal</p1>
 ```bash
 cd world/
+echo 'export GAZEBO_PLUGIN_PATH=$GAZEBO_PLUGIN_PATH:/opt/ros/humble/lib' >> ~/.bashrc
+source ~/.bashrc
 gazebo 2duba.world --verbose
 ```
 
