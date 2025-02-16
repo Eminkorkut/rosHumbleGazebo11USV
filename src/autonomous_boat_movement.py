@@ -4,6 +4,7 @@ from cv_bridge import CvBridge
 from ultralytics import YOLO
 from rclpy.node import Node
 import argparse
+import torch
 import rclpy
 import cv2
 import ast
@@ -13,6 +14,8 @@ class usvController(Node):
         super().__init__('usvController')
 
         self.args = args
+
+        self.args.yoloDevice = ['cuda' if torch.cuda.is_available() else 'cpu'][0]
 
         # create a publisher to publish vessel movements
         self.publisher = self.create_publisher(Twist, args.publishTopic, 10)
@@ -94,7 +97,7 @@ class usvController(Node):
         # convert image message to cv2 image
         frame = self.bridge.imgmsg_to_cv2(msg, 'bgr8')
         # detect objects in the image
-        results = self.model.predict(frame, max_det=self.args.yoloMaxDetect, iou=self.args.yoloIou, conf=self.args.yoloConf)
+        results = self.model.predict(frame, max_det=self.args.yoloMaxDetect, iou=self.args.yoloIou, conf=self.args.yoloConf, device=self.args.yoloDevice, verbose=self.args.yoloVerbose)
 
         # get the center of the main boat
         mainBoatCenterX = frame.shape[1] // 2
@@ -110,7 +113,8 @@ class usvController(Node):
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 detectedObjectCenterX = (x1 + x2) // 2
                 detectedObjectCenterY = (y1 + y2) // 2
-                detectionObjectCenterList.append((detectedObjectCenterX, detectedObjectCenterY))
+                detectedObjectArea = (x2 - x1) * (y2 - y1)
+                detectionObjectCenterList.append((detectedObjectCenterX, detectedObjectCenterY, detectedObjectArea))
 
                 # draw the rectangle and circle around the detected objects
                 cv2.rectangle(frame, (x1, y1), (x2, y2), self.args.detectObjectsRectangleColor, self.args.detectObjectRectangleThickness)
@@ -122,7 +126,7 @@ class usvController(Node):
             maxYdifference = self.args.targetObjectsMaxDistance
 
             # sort the detected objects according to their y coordinates
-            detectionObjectCenterList.sort(key=lambda x: x[1], reverse=True)
+            detectionObjectCenterList.sort(key=lambda x: x[2], reverse=True)
 
             if abs(detectionObjectCenterList[0][1] - detectionObjectCenterList[1][1]) < maxYdifference:
                 self.lastTargetPair = detectionObjectCenterList[0], detectionObjectCenterList[1]
@@ -163,7 +167,11 @@ class usvController(Node):
             cv2.circle(frame, (int(avgX), int(avgY)), 7, self.args.targetCircleColor, -1)
             cv2.line(frame, (mainBoatCenterX, mainBoatCenterY), (int(avgX), int(avgY)), (0, 255, 255), 2)
             if self.lastTargetPair:
-                cv2.line(frame, self.lastTargetPair[0], self.lastTargetPair[1], (0, 0, 255), 2)
+                cv2.line(frame, 
+                        (self.lastTargetPair[0][0], self.lastTargetPair[0][1]), 
+                        (self.lastTargetPair[1][0], self.lastTargetPair[1][1]), 
+                        (0, 0, 255), 
+                        2)
 
 
         # draw the center of the main boat
@@ -179,17 +187,23 @@ class usvController(Node):
 
 def parseOpt():
     parser = argparse.ArgumentParser()
+    # yolo model parameters
     parser.add_argument('--yoloModelPath', type=str, default='weights/230_epochs/weights/best.pt', help='Path to the YOLO model')
     parser.add_argument('--yoloConf', type=float, default=0.5, help='Confidence threshold for YOLO object detection (range: 0 to 1)')
     parser.add_argument('--yoloIou', type=float, default=0.6, help='Intersection over Union (IoU) threshold for YOLO object detection')
+    parser.add_argument('--yoloDevice', type=str, default='cuda', help='Device to run YOLO model on (e.g., "cpu" or "cuda")')
+    parser.add_argument('--yoloVerbose', type=bool, default=False, help='Enable verbose mode for YOLO object detection')
     parser.add_argument('--yoloMaxDetect', type=int, default=5, help='Maximum number of objects to detect using YOLO')
+    # ros2 parameters
     parser.add_argument('--publishTopic', type=str, default='/vessel_a/cmd_vel', help='Topic to publish vessel movements')
     parser.add_argument('--subscribeTopic', type=str, default='/vessel_a/camera/image_raw', help='Topic to subscribe to get image from camera')
+    # visualization parameters
     parser.add_argument('--frameCenterCircleColor', type=str, default='(255, 0, 0)', help='Color of the circle to show the center of the frame')
     parser.add_argument('--targetCircleColor', type=str, default='(255, 125, 125)', help='Color of the circle to show the target')
     parser.add_argument('--detectObjectsRectangleColor', type=str, default='(0, 255, 0)', help='Color of the rectangle to show the detected objects')
     parser.add_argument('--detectObjectRectangleThickness', type=int, default=2, help='Thickness of the rectangle to show the detected objects')
     parser.add_argument('--detectObjectsCircleColor', type=str, default='(0, 0, 255)', help='Color of the circle to show the detected objects')
+    # usv parameters
     parser.add_argument('--vehicleMass', type=float, default=1.0, help='Mass of the vehicle')
     parser.add_argument('--vehicleInertia', type=float, default=1.0, help='Inertia of the vehicle')
     parser.add_argument('--timeStep', type=float, default=0.1, help='Time step (frequency)')
