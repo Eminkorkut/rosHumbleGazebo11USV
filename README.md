@@ -58,6 +58,7 @@ pip3 install -r requirements/requirementsPython.txt
 
 <p1>Plugin controls</p1>
 ```bash
+sudo apt install plocate
 locate libgazebo_ros_camera.so && locate libgazebo_ros_planar_move.so
 # If the output is blank, use the following command
 sudo cp -r plugin/* /opt/ros/humble/lib/
