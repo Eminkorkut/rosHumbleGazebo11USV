@@ -1,6 +1,6 @@
 #!/bin/bash
 
 # Install Gazebo
-curl -sSL http://get.gazebosim.org | sh
+sudo apt install gazebo
 
 echo "Gazebo11 installation completed. Run 'gazebo' to use Gazebo11."
