@@ -2,5 +2,5 @@ opencv-python
 ultralytics
 matplotlib
 pynput
-numpy
+numpy==1.26.4
 torch
