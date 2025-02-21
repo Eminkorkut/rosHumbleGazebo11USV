@@ -1,26 +1,23 @@
-from sensor_msgs.msg import Image
 from geometry_msgs.msg import Twist
+from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from ultralytics import YOLO
 from rclpy.node import Node
+import numpy as np
 import argparse
 import torch
 import rclpy
 import cv2
 import ast
 
+
 class usvController(Node):
     def __init__(self, args):
         super().__init__('usvController')
-
         self.args = args
+        self.args.yoloDevice = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-        self.args.yoloDevice = ['cuda' if torch.cuda.is_available() else 'cpu'][0]
-
-        # create a publisher to publish vessel movements
         self.publisher = self.create_publisher(Twist, args.publishTopic, 10)
-
-        # create a subscriber to get image from camera
         self.subscription = self.create_subscription(
             Image,
             args.subscribeTopic,
@@ -28,194 +25,200 @@ class usvController(Node):
             10
         )
 
-        # create an object to use cv2 library
+        # Initialize YOLO model
         self.bridge = CvBridge()
-        # load YOLO model
         self.model = YOLO(args.yoloModelPath)
 
-        # variables for vessel movements
+        # Initialize vehicle parameters
         self.currentVelocity = 0.1
         self.currentAngularVelocity = 0.0
         self.appliedForce = 0.0
         self.appliedTorque = 0.0
-        # mass of the vehicle
+
         self.mass = args.vehicleMass
-        # inertia of the vehicle
         self.inertia = args.vehicleInertia
-        # time step (frequency)
         self.timeStep = args.timeStep
 
-        # create a timer to update the vehicle movements
+        # Timer to update the vehicle's movement
         self.timer = self.create_timer(self.timeStep, self.update)
 
-        # necessary variables
-        self.targetHistory = [] 
+        self.targetHistory = []
         self.lastTargetPair = None
 
+        # PID controller parameters
         self.prevErrorX = 0.0
         self.integralX = 0.0
         self.alpha = args.alpha
 
-        # pid parameters
-        self.kpAngular = args.kpAngular # proportional gain
-        self.kiAngular = args.kiAngular # integral gain
-        self.kdAngular = args.kdAngular # derivative gain 
+        self.kpAngular = args.kpAngular
+        self.kiAngular = args.kiAngular
+        self.kdAngular = args.kdAngular
 
     def update(self):
+        # Compute new velocities
         acceleration = self.appliedForce / self.mass
         angularAcceleration = self.appliedTorque / self.inertia
 
-        # calculate the velocity
+        # Update velocities
         self.currentVelocity += acceleration * self.timeStep
         self.currentAngularVelocity += angularAcceleration * self.timeStep
 
-        # create a Twist message to publish the vessel movements
+        # Publish new velocities
         msg = Twist()
         msg.linear.x = self.currentVelocity
         msg.angular.z = self.currentAngularVelocity
         self.publisher.publish(msg)
-        
-    def adjustMovement(self, targetX, referenceX, targetY, referenceY):
-        # calculate the error
+
+    def adjustMovement(self, targetX: int, referenceX: int, targetY: int, referenceY: int):
+        # PID controller
         errorX = targetX - referenceX
         self.integralX += errorX * self.timeStep
         derivativeX = (errorX - self.prevErrorX) / self.timeStep
 
-        # calculate the angular velocity with PID controller
-        self.appliedTorque = -(self.kpAngular * errorX + self.kiAngular * self.integralX + self.kdAngular * derivativeX)
+        # Compute control signal
+        pid_output = self.kpAngular * errorX + self.kiAngular * self.integralX + self.kdAngular * derivativeX
+        self.appliedTorque = -np.clip(pid_output, -1.0, 1.0)
         self.appliedForce = 0.01 * (targetY - referenceY)
-
-        # apply limits to the angular velocity
-        if self.appliedTorque > 1.0:
-            self.appliedTorque = 1.0
-        elif self.appliedTorque < -1.0:
-            self.appliedTorque = -1.0
 
         self.prevErrorX = errorX
 
-    def imageCallBack(self, msg):
-        # convert image message to cv2 image
+    def imageCallBack(self, msg: Image):
+        # Convert ROS Image to OpenCV image
         frame = self.bridge.imgmsg_to_cv2(msg, 'bgr8')
-        # detect objects in the image
-        results = self.model.predict(frame, max_det=self.args.yoloMaxDetect, iou=self.args.yoloIou, conf=self.args.yoloConf, device=self.args.yoloDevice, verbose=self.args.yoloVerbose)
+        height, width = frame.shape[:2]
+        mainBoatCenterX, mainBoatCenterY = width // 2, height // 2
 
-        # get the center of the main boat
-        mainBoatCenterX = frame.shape[1] // 2
-        mainBoatCenterY = frame.shape[0] // 2
+        # Perform object detection using YOLO
+        results = self.model.predict(
+            frame,
+            max_det=self.args.yoloMaxDetect,
+            iou=self.args.yoloIou,
+            conf=self.args.yoloConf,
+            device=self.args.yoloDevice,
+            verbose=self.args.yoloVerbose
+        )
 
-        # list to store detected objects
+        # Draw bounding boxes and circles around detected objects
         detectionObjectCenterList = []
+        rect_color = self.args.detectObjectsRectangleColor
+        circle_color = self.args.detectObjectsCircleColor
+        maxYdifference = self.args.targetObjectsMaxDistance
 
-        # iterate over the detected objects
+        # Draw bounding boxes and circles around detected objects
         for result in results:
-            boxes = result.boxes
-            for box in boxes:
+            for box in result.boxes:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
-                detectedObjectCenterX = (x1 + x2) // 2
-                detectedObjectCenterY = (y1 + y2) // 2
-                detectedObjectArea = (x2 - x1) * (y2 - y1)
-                detectionObjectCenterList.append((detectedObjectCenterX, detectedObjectCenterY, detectedObjectArea))
+                centerX = (x1 + x2) // 2
+                centerY = (y1 + y2) // 2
+                area = (x2 - x1) * (y2 - y1)
+                detectionObjectCenterList.append((centerX, centerY, area))
+                cv2.rectangle(frame, (x1, y1), (x2, y2), rect_color, self.args.detectObjectRectangleThickness)
+                cv2.circle(frame, (centerX, centerY), 5, circle_color, -1)
 
-                # draw the rectangle and circle around the detected objects
-                cv2.rectangle(frame, (x1, y1), (x2, y2), self.args.detectObjectsRectangleColor, self.args.detectObjectRectangleThickness)
-                cv2.circle(frame, (detectedObjectCenterX, detectedObjectCenterY), 5, self.args.detectObjectsCircleColor, -1)
+        # Sort detected objects by area
+        detectionObjectCenterList.sort(key=lambda x: x[2], reverse=True)
+        num_detections = len(detectionObjectCenterList)
 
-
-        if len(detectionObjectCenterList) >= 2:
-            # maximum distance between the detected objects
-            maxYdifference = self.args.targetObjectsMaxDistance
-
-            # sort the detected objects according to their y coordinates
-            detectionObjectCenterList.sort(key=lambda x: x[2], reverse=True)
-
-            if abs(detectionObjectCenterList[0][1] - detectionObjectCenterList[1][1]) < maxYdifference:
-                self.lastTargetPair = detectionObjectCenterList[0], detectionObjectCenterList[1]
+        # Compute average target position
+        if num_detections >= 2:
+            first, second = detectionObjectCenterList[0], detectionObjectCenterList[1]
+            sameY = abs(first[1] - second[1]) < maxYdifference
+            if sameY:
+                self.lastTargetPair = (first, second)
+                avgX = (first[0] + second[0]) // 2
+                avgY = (first[1] + second[1]) // 2
 
                 if self.targetHistory:
                     prevX, prevY = self.targetHistory[-1]
-                    avgX = self.alpha * ((detectionObjectCenterList[0][0] + detectionObjectCenterList[1][0]) // 2) + (1 - self.alpha) * prevX
-                    avgY = self.alpha * ((detectionObjectCenterList[0][1] + detectionObjectCenterList[1][1]) // 2) + (1 - self.alpha) * prevY
-                else:
-                    avgX = (detectionObjectCenterList[0][0] + detectionObjectCenterList[1][0]) // 2
-                    avgY = (detectionObjectCenterList[0][1] + detectionObjectCenterList[1][1]) // 2
+                    avgX = int(self.alpha * avgX + (1 - self.alpha) * prevX)
+                    avgY = int(self.alpha * avgY + (1 - self.alpha) * prevY)
 
                 self.targetHistory.append((avgX, avgY))
-
-                if len(self.targetHistory) > 10:
-                    self.targetHistory.pop(0)
+                self.targetHistory = self.targetHistory[-10:]
             else:
                 avgX, avgY = mainBoatCenterX, mainBoatCenterY
-        
-        elif len(detectionObjectCenterList) == 1:
-            if self.targetHistory:
-                avgX, avgY = self.targetHistory[-1]
-            else:
-                avgX, avgY = mainBoatCenterX, mainBoatCenterY
-        
+        elif num_detections == 1:
+            avgX, avgY = self.targetHistory[-1] if self.targetHistory else (mainBoatCenterX, mainBoatCenterY)
         else:
-            if self.targetHistory:
-                avgX, avgY = self.targetHistory[-1]
-            else:
-                avgX, avgY = mainBoatCenterX, mainBoatCenterY
+            avgX, avgY = self.targetHistory[-1] if self.targetHistory else (mainBoatCenterX, mainBoatCenterY)
 
-
-        # adjust the movement of the boat
+        # Adjust movement based on target position
         self.adjustMovement(avgX, mainBoatCenterX, avgY, mainBoatCenterY)
 
-        # draw the line between the main boat and the target
-        if len(detectionObjectCenterList) >= 2 and abs(detectionObjectCenterList[0][1] - detectionObjectCenterList[1][1]) < maxYdifference:
+        # Visualize target if conditions are met
+        if num_detections >= 2 and abs(detectionObjectCenterList[0][1] - detectionObjectCenterList[1][1]) < maxYdifference:
             cv2.circle(frame, (int(avgX), int(avgY)), 7, self.args.targetCircleColor, -1)
             cv2.line(frame, (mainBoatCenterX, mainBoatCenterY), (int(avgX), int(avgY)), (0, 255, 255), 2)
             if self.lastTargetPair:
-                cv2.line(frame, 
-                        (self.lastTargetPair[0][0], self.lastTargetPair[0][1]), 
-                        (self.lastTargetPair[1][0], self.lastTargetPair[1][1]), 
-                        (0, 0, 255), 
-                        2)
+                pt1, pt2 = self.lastTargetPair
+                cv2.line(frame, (pt1[0], pt1[1]), (pt2[0], pt2[1]), (0, 0, 255), 2)
 
-
-        # draw the center of the main boat
+        # Visualize the center of the frame
         cv2.circle(frame, (mainBoatCenterX, mainBoatCenterY), 5, self.args.frameCenterCircleColor, -1)
-
-        # show the frame
         cv2.imshow('frame', frame)
         cv2.waitKey(1)
 
-    def destroyNode(self):
+    # Destroy the node
+    def destroy_node(self):
         super().destroy_node()
         cv2.destroyAllWindows()
 
+# Parse command line arguments
 def parseOpt():
     parser = argparse.ArgumentParser()
-    # yolo model parameters
-    parser.add_argument('--yoloModelPath', type=str, default='weights/230_epochs/weights/best.pt', help='Path to the YOLO model')
-    parser.add_argument('--yoloConf', type=float, default=0.5, help='Confidence threshold for YOLO object detection (range: 0 to 1)')
-    parser.add_argument('--yoloIou', type=float, default=0.6, help='Intersection over Union (IoU) threshold for YOLO object detection')
-    parser.add_argument('--yoloDevice', type=str, default='cuda', help='Device to run YOLO model on (e.g., "cpu" or "cuda")')
-    parser.add_argument('--yoloVerbose', type=bool, default=False, help='Enable verbose mode for YOLO object detection')
-    parser.add_argument('--yoloMaxDetect', type=int, default=5, help='Maximum number of objects to detect using YOLO')
-    # ros2 parameters
-    parser.add_argument('--publishTopic', type=str, default='/vessel_a/cmd_vel', help='Topic to publish vessel movements')
-    parser.add_argument('--subscribeTopic', type=str, default='/vessel_a/camera/image_raw', help='Topic to subscribe to get image from camera')
-    # visualization parameters
-    parser.add_argument('--frameCenterCircleColor', type=str, default='(255, 0, 0)', help='Color of the circle to show the center of the frame')
-    parser.add_argument('--targetCircleColor', type=str, default='(255, 125, 125)', help='Color of the circle to show the target')
-    parser.add_argument('--detectObjectsRectangleColor', type=str, default='(0, 255, 0)', help='Color of the rectangle to show the detected objects')
-    parser.add_argument('--detectObjectRectangleThickness', type=int, default=2, help='Thickness of the rectangle to show the detected objects')
-    parser.add_argument('--detectObjectsCircleColor', type=str, default='(0, 0, 255)', help='Color of the circle to show the detected objects')
-    # usv parameters
-    parser.add_argument('--vehicleMass', type=float, default=1.0, help='Mass of the vehicle')
-    parser.add_argument('--vehicleInertia', type=float, default=1.0, help='Inertia of the vehicle')
-    parser.add_argument('--timeStep', type=float, default=0.1, help='Time step (frequency)')
-    parser.add_argument('--kpAngular', type=float, default=0.002, help='Proportional gain')
-    parser.add_argument('--kiAngular', type=float, default=0.0001, help='Integral gain')
-    parser.add_argument('--kdAngular', type=float, default=0.001, help='Derivative gain')
-    parser.add_argument('--alpha', type=float, default=0.2, help='Alpha value for exponential moving average')
-    parser.add_argument('--targetObjectsMaxDistance', type=int, default=50, help='Maximum distance between the detected objects')
+    # YOLO model parameters
+    parser.add_argument('--yoloModelPath', type=str, default='weights/230_epochs/weights/best.pt',
+                        help='Path to the YOLO model')
+    parser.add_argument('--yoloConf', type=float, default=0.5,
+                        help='Confidence threshold for YOLO object detection (range: 0 to 1)')
+    parser.add_argument('--yoloIou', type=float, default=0.6,
+                        help='Intersection over Union (IoU) threshold for YOLO object detection')
+    parser.add_argument('--yoloDevice', type=str, default='cuda',
+                        help='Device to run YOLO model on (e.g., "cpu" or "cuda")')
+    parser.add_argument('--yoloVerbose', type=bool, default=False,
+                        help='Enable verbose mode for YOLO object detection')
+    parser.add_argument('--yoloMaxDetect', type=int, default=5,
+                        help='Maximum number of objects to detect using YOLO')
+
+    # ROS 2 parameters
+    parser.add_argument('--publishTopic', type=str, default='/vessel_a/cmd_vel',
+                        help='Topic to publish vessel movements')
+    parser.add_argument('--subscribeTopic', type=str, default='/vessel_a/camera/image_raw',
+                        help='Topic to subscribe to get image from camera')
+
+    # Visualization parameters
+    parser.add_argument('--frameCenterCircleColor', type=str, default='(255, 0, 0)',
+                        help='Color of the circle to show the center of the frame')
+    parser.add_argument('--targetCircleColor', type=str, default='(255, 125, 125)',
+                        help='Color of the circle to show the target')
+    parser.add_argument('--detectObjectsRectangleColor', type=str, default='(0, 255, 0)',
+                        help='Color of the rectangle to show the detected objects')
+    parser.add_argument('--detectObjectRectangleThickness', type=int, default=2,
+                        help='Thickness of the rectangle to show the detected objects')
+    parser.add_argument('--detectObjectsCircleColor', type=str, default='(0, 0, 255)',
+                        help='Color of the circle to show the detected objects')
+
+    # Vehicle parameters
+    parser.add_argument('--vehicleMass', type=float, default=1.0,
+                        help='Mass of the vehicle')
+    parser.add_argument('--vehicleInertia', type=float, default=1.0,
+                        help='Inertia of the vehicle')
+    parser.add_argument('--timeStep', type=float, default=0.1,
+                        help='Time step (frequency)')
+    parser.add_argument('--kpAngular', type=float, default=0.002,
+                        help='Proportional gain')
+    parser.add_argument('--kiAngular', type=float, default=0.0001,
+                        help='Integral gain')
+    parser.add_argument('--kdAngular', type=float, default=0.001,
+                        help='Derivative gain')
+    parser.add_argument('--alpha', type=float, default=0.2,
+                        help='Alpha value for exponential moving average')
+    parser.add_argument('--targetObjectsMaxDistance', type=int, default=50,
+                        help='Maximum distance between the detected objects')
 
     args = parser.parse_args()
 
-    # Change the string values to tuple
+    # Convert string to tuple
     args.frameCenterCircleColor = ast.literal_eval(args.frameCenterCircleColor)
     args.targetCircleColor = ast.literal_eval(args.targetCircleColor)
     args.detectObjectsRectangleColor = ast.literal_eval(args.detectObjectsRectangleColor)
@@ -223,18 +226,17 @@ def parseOpt():
 
     return args
 
-# main function
+# Main function
 def main():
     rclpy.init()
     args = parseOpt()
     controller = usvController(args)
-
     try:
         rclpy.spin(controller)
     finally:
-        controller.destroyNode()
+        controller.destroy_node()
         rclpy.shutdown()
 
-# run the main function
+# Entry point
 if __name__ == '__main__':
     main()
