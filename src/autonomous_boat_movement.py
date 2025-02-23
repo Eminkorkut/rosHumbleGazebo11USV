@@ -25,9 +25,21 @@ class usvController(Node):
             10
         )
 
-        # Initialize YOLO model
-        self.bridge = CvBridge()
-        self.model = YOLO(args.yoloModelPath)
+        # Initialize CvBridge
+        try:
+            self.bridge = CvBridge()
+        except Exception as e:
+            self.get_logger().error(f'Error initializing CvBridge: {e}')
+            self.destroy_node()
+            return
+
+        # Load YOLO model
+        try :
+            self.model = YOLO(args.yoloModelPath)
+        except Exception as e:
+            self.get_logger().error(f'Error loading YOLO model: {e}')
+            self.destroy_node()
+            return
 
         # Initialize vehicle parameters
         self.currentVelocity = 0.1
@@ -83,80 +95,85 @@ class usvController(Node):
         self.prevErrorX = errorX
 
     def imageCallBack(self, msg: Image):
-        # Convert ROS Image to OpenCV image
-        frame = self.bridge.imgmsg_to_cv2(msg, 'bgr8')
-        height, width = frame.shape[:2]
-        mainBoatCenterX, mainBoatCenterY = width // 2, height // 2
+        try:
+            # Convert ROS Image to OpenCV image
+            frame = self.bridge.imgmsg_to_cv2(msg, 'bgr8')
+            height, width = frame.shape[:2]
+            mainBoatCenterX, mainBoatCenterY = width // 2, height // 2
 
-        # Perform object detection using YOLO
-        results = self.model.predict(
-            frame,
-            max_det=self.args.yoloMaxDetect,
-            iou=self.args.yoloIou,
-            conf=self.args.yoloConf,
-            device=self.args.yoloDevice,
-            verbose=self.args.yoloVerbose
-        )
+            # Perform object detection using YOLO
+            results = self.model.predict(
+                frame,
+                max_det=self.args.yoloMaxDetect,
+                iou=self.args.yoloIou,
+                conf=self.args.yoloConf,
+                device=self.args.yoloDevice,
+                verbose=self.args.yoloVerbose
+            )
 
-        # Draw bounding boxes and circles around detected objects
-        detectionObjectCenterList = []
-        rect_color = self.args.detectObjectsRectangleColor
-        circle_color = self.args.detectObjectsCircleColor
-        maxYdifference = self.args.targetObjectsMaxDistance
+            # Draw bounding boxes and circles around detected objects
+            detectionObjectCenterList = []
+            rect_color = self.args.detectObjectsRectangleColor
+            circle_color = self.args.detectObjectsCircleColor
+            maxYdifference = self.args.targetObjectsMaxDistance
 
-        # Draw bounding boxes and circles around detected objects
-        for result in results:
-            for box in result.boxes:
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
-                centerX = (x1 + x2) // 2
-                centerY = (y1 + y2) // 2
-                area = (x2 - x1) * (y2 - y1)
-                detectionObjectCenterList.append((centerX, centerY, area))
-                cv2.rectangle(frame, (x1, y1), (x2, y2), rect_color, self.args.detectObjectRectangleThickness)
-                cv2.circle(frame, (centerX, centerY), 5, circle_color, -1)
+            # Draw bounding boxes and circles around detected objects
+            for result in results:
+                for box in result.boxes:
+                    x1, y1, x2, y2 = map(int, box.xyxy[0])
+                    centerX = (x1 + x2) // 2
+                    centerY = (y1 + y2) // 2
+                    area = (x2 - x1) * (y2 - y1)
+                    detectionObjectCenterList.append((centerX, centerY, area))
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), rect_color, self.args.detectObjectRectangleThickness)
+                    cv2.circle(frame, (centerX, centerY), 5, circle_color, -1)
 
-        # Sort detected objects by area
-        detectionObjectCenterList.sort(key=lambda x: x[2], reverse=True)
-        num_detections = len(detectionObjectCenterList)
+            # Sort detected objects by area
+            detectionObjectCenterList.sort(key=lambda x: x[2], reverse=True)
+            num_detections = len(detectionObjectCenterList)
 
-        # Compute average target position
-        if num_detections >= 2:
-            first, second = detectionObjectCenterList[0], detectionObjectCenterList[1]
-            sameY = abs(first[1] - second[1]) < maxYdifference
-            if sameY:
-                self.lastTargetPair = (first, second)
-                avgX = (first[0] + second[0]) // 2
-                avgY = (first[1] + second[1]) // 2
+            # Compute average target position
+            if num_detections >= 2:
+                first, second = detectionObjectCenterList[0], detectionObjectCenterList[1]
+                sameY = abs(first[1] - second[1]) < maxYdifference
+                if sameY:
+                    self.lastTargetPair = (first, second)
+                    avgX = (first[0] + second[0]) // 2
+                    avgY = (first[1] + second[1]) // 2
 
-                if self.targetHistory:
-                    prevX, prevY = self.targetHistory[-1]
-                    avgX = int(self.alpha * avgX + (1 - self.alpha) * prevX)
-                    avgY = int(self.alpha * avgY + (1 - self.alpha) * prevY)
+                    if self.targetHistory:
+                        prevX, prevY = self.targetHistory[-1]
+                        avgX = int(self.alpha * avgX + (1 - self.alpha) * prevX)
+                        avgY = int(self.alpha * avgY + (1 - self.alpha) * prevY)
 
-                self.targetHistory.append((avgX, avgY))
-                self.targetHistory = self.targetHistory[-10:]
+                    self.targetHistory.append((avgX, avgY))
+                    self.targetHistory = self.targetHistory[-10:]
+                else:
+                    avgX, avgY = mainBoatCenterX, mainBoatCenterY
+            elif num_detections == 1:
+                avgX, avgY = self.targetHistory[-1] if self.targetHistory else (mainBoatCenterX, mainBoatCenterY)
             else:
-                avgX, avgY = mainBoatCenterX, mainBoatCenterY
-        elif num_detections == 1:
-            avgX, avgY = self.targetHistory[-1] if self.targetHistory else (mainBoatCenterX, mainBoatCenterY)
-        else:
-            avgX, avgY = self.targetHistory[-1] if self.targetHistory else (mainBoatCenterX, mainBoatCenterY)
+                avgX, avgY = self.targetHistory[-1] if self.targetHistory else (mainBoatCenterX, mainBoatCenterY)
 
-        # Adjust movement based on target position
-        self.adjustMovement(avgX, mainBoatCenterX, avgY, mainBoatCenterY)
+            # Adjust movement based on target position
+            self.adjustMovement(avgX, mainBoatCenterX, avgY, mainBoatCenterY)
 
-        # Visualize target if conditions are met
-        if num_detections >= 2 and abs(detectionObjectCenterList[0][1] - detectionObjectCenterList[1][1]) < maxYdifference:
-            cv2.circle(frame, (int(avgX), int(avgY)), 7, self.args.targetCircleColor, -1)
-            cv2.line(frame, (mainBoatCenterX, mainBoatCenterY), (int(avgX), int(avgY)), (0, 255, 255), 2)
-            if self.lastTargetPair:
-                pt1, pt2 = self.lastTargetPair
-                cv2.line(frame, (pt1[0], pt1[1]), (pt2[0], pt2[1]), (0, 0, 255), 2)
+            # Visualize target if conditions are met
+            if num_detections >= 2 and abs(detectionObjectCenterList[0][1] - detectionObjectCenterList[1][1]) < maxYdifference:
+                cv2.circle(frame, (int(avgX), int(avgY)), 7, self.args.targetCircleColor, -1)
+                cv2.line(frame, (mainBoatCenterX, mainBoatCenterY), (int(avgX), int(avgY)), (0, 255, 255), 2)
+                if self.lastTargetPair:
+                    pt1, pt2 = self.lastTargetPair
+                    cv2.line(frame, (pt1[0], pt1[1]), (pt2[0], pt2[1]), (0, 0, 255), 2)
 
-        # Visualize the center of the frame
-        cv2.circle(frame, (mainBoatCenterX, mainBoatCenterY), 5, self.args.frameCenterCircleColor, -1)
-        cv2.imshow('frame', frame)
-        cv2.waitKey(1)
+            # Visualize the center of the frame
+            cv2.circle(frame, (mainBoatCenterX, mainBoatCenterY), 5, self.args.frameCenterCircleColor, -1)
+            cv2.imshow('frame', frame)
+            cv2.waitKey(1)
+
+        except Exception as e:
+            self.get_logger().error(f'Error processing image: {e}')
+
 
     # Destroy the node
     def destroy_node(self):
